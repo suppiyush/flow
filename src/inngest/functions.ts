@@ -1,40 +1,44 @@
+import { NonRetriableError } from "inngest";
 import { inngest } from "./client";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createOpenAI } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { generateText } from "ai";
+import { prisma } from "@/lib/db";
+import { topologicalSort } from "./utils";
+import { NodeType } from "@prisma/client";
+import { getExecutor } from "@/features/executions/lib/executor-registry";
 
-const google = createGoogleGenerativeAI();
-const openai = createOpenAI();
-const anthropic = createAnthropic();
-
-export const execute = inngest.createFunction(
-  { id: "execute-ai", triggers: [{ event: "execute/ai" }] },
+export const executeWorkflow = inngest.createFunction(
+  { id: "execute-workflow", triggers: [{ event: "workflows/execute.workflow" }] },
   async ({ event, step }) => {
-    await step.sleep("pretend", "5s");
+    const workflowId = event.data.workflowId;
 
-    const { steps: geminiSteps } = await step.ai.wrap("gemini-generate-text", generateText, {
-      model: google("gemini-2.5-flash"),
-      system: "You are a helpful assistant.",
-      prompt: "What is 2+2?",
+    if (!workflowId) {
+      throw new NonRetriableError("Workflow ID is missing");
+    }
+
+    const sortedNodes = await step.run("prepare-workflow", async () => {
+      const workflow = await prisma.workflow.findUniqueOrThrow({
+        where: { id: workflowId },
+        include: {
+          nodes: true,
+          connections: true,
+        },
+      });
+
+      return topologicalSort(workflow.nodes, workflow.connections);
     });
 
-    const { steps: openaiSteps } = await step.ai.wrap("openai-generate-text", generateText, {
-      model: openai("gpt-4.1"),
-      system: "You are a helpful assistant.",
-      prompt: "What is 2+2?",
-    });
+    let context = event.data.initialData || {};
 
-    const { steps: anthropicSteps } = await step.ai.wrap("anthropic-generate-text", generateText, {
-      model: anthropic("claude-sonnet-4-5"),
-      system: "You are a helpful assistant.",
-      prompt: "What is 2+2?",
-    });
+    for (const node of sortedNodes) {
+      const executor = getExecutor(node.type as NodeType);
 
-    return {
-      geminiSteps,
-      openaiSteps,
-      anthropicSteps,
-    };
+      context = await executor({
+        data: node.data as Record<string, unknown>,
+        nodeId: node.id,
+        context,
+        step,
+      });
+    }
+
+    return { workflowId, result: context };
   },
 );
