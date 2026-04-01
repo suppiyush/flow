@@ -1,15 +1,7 @@
-import Handlebars from "handlebars";
 import { NonRetriableError } from "inngest";
 import ky, { type Options as KyOptions } from "ky";
 import type { NodeExecutor } from "@/features/executions/types";
 import { httpRequestChannel } from "@/inngest/channels/http-request";
-
-Handlebars.registerHelper("json", (context) => {
-  const jsonString = JSON.stringify(context, null, 2);
-  const safeString = new Handlebars.SafeString(jsonString);
-
-  return safeString;
-});
 
 type HttpRequestData = {
   variableName: string;
@@ -58,6 +50,9 @@ export const httpRequestExecutor: NodeExecutor<HttpRequestData> = async ({ data,
 
   try {
     const result = await step.run("http-request", async () => {
+      // Lazy-load Handlebars only when the node executes, not at module load time
+      const Handlebars = (await import("handlebars")).default;
+
       const endpoint = Handlebars.compile(data.endpoint)(context);
       const method = data.method;
 
