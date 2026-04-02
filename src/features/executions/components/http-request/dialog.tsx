@@ -24,12 +24,11 @@ const formSchema = z.object({
     .min(1, { message: "Variable name is required" })
     .regex(/^[A-Za-z_$][A-Za-z0-9_$]*$/, {
       message:
-        "Variable name must start with a letter or underscore and container only letters, numbers, and underscores",
+        "Variable name must start with a letter or underscore and contain only letters, numbers, and underscores",
     }),
   endpoint: z.string().min(1, { message: "Please enter a valid URL" }),
   method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
   body: z.string().optional(),
-  // .refine() TODO JSON5
 });
 
 export type HttpRequestFormValues = z.infer<typeof formSchema>;
@@ -52,7 +51,6 @@ export const HttpRequestDialog = ({ open, onOpenChange, onSubmit, defaultValues 
     },
   });
 
-  // Reset form values when dialog opens with new defaults
   useEffect(() => {
     if (open) {
       form.reset({
