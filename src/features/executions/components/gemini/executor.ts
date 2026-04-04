@@ -4,6 +4,7 @@ import { geminiChannel } from "@/inngest/channels/gemini";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { prisma } from "@/lib/db";
+import { decrypt } from "@/lib/encryption";
 
 type GeminiData = {
   variableName?: string;
@@ -78,7 +79,7 @@ export const geminiExecutor: NodeExecutor<GeminiData> = async ({ data, userId, n
   }
 
   const google = createGoogleGenerativeAI({
-    apiKey: credentialValue.value,
+    apiKey: decrypt(credentialValue.value),
   });
 
   try {
